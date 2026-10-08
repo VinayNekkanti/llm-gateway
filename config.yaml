@@ -1,0 +1,4 @@
+# Settings for the LLM gateway
+upstream:
+  url: http://localhost:11434/v1/chat/completions
+  timeout_seconds: 60
