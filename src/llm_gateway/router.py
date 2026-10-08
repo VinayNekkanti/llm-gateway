@@ -1,7 +1,9 @@
+import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any, TypeVar
 
+import structlog
 from tenacity import (
     AsyncRetrying,
     retry_if_exception,
@@ -11,9 +13,11 @@ from tenacity import (
 
 from llm_gateway.config import Config, ModelConfig
 from llm_gateway.errors import GatewayError
+from llm_gateway.observability import FALLBACKS, UPSTREAM_ATTEMPTS, UPSTREAM_LATENCY
 from llm_gateway.providers import Provider, ProviderError
 
 T = TypeVar("T")
+logger = structlog.get_logger()
 
 
 @dataclass
@@ -29,6 +33,20 @@ class Target:
         upstream = {k: v for k, v in body.items() if k not in self.model.drop_params}
         upstream["model"] = self.model.model
         return upstream
+
+
+async def _measure[R](call: Callable[[Target], Awaitable[R]], target: Target) -> R:
+    provider = target.provider.name
+    start = time.perf_counter()
+    try:
+        result = await call(target)
+    except ProviderError as exc:
+        UPSTREAM_ATTEMPTS.labels(provider, target.name, str(exc.status_code)).inc()
+        raise
+    finally:
+        UPSTREAM_LATENCY.labels(provider).observe(time.perf_counter() - start)
+    UPSTREAM_ATTEMPTS.labels(provider, target.name, "ok").inc()
+    return result
 
 
 def _is_retryable(exc: BaseException) -> bool:
@@ -73,7 +91,8 @@ class Router:
         self, model_name: str, call: Callable[[Target], Awaitable[T]]
     ) -> tuple[T, Target]:
         last_error: ProviderError | None = None
-        for target in self.targets(model_name):
+        targets = self.targets(model_name)
+        for index, target in enumerate(targets):
             try:
                 return await self._with_retries(call, target), target
             except ProviderError as exc:
@@ -81,6 +100,14 @@ class Router:
                     # The request itself is bad (e.g. 400): another model won't fix it
                     raise
                 last_error = exc  # this model is down or overloaded: try the next one
+                if index + 1 < len(targets):
+                    FALLBACKS.labels(target.name, targets[index + 1].name).inc()
+                    logger.warning(
+                        "falling_back",
+                        from_model=target.name,
+                        to_model=targets[index + 1].name,
+                        status=exc.status_code,
+                    )
         assert last_error is not None
         raise last_error
 
@@ -99,5 +126,5 @@ class Router:
             reraise=True,
         ):
             with attempt:
-                return await call(target)
+                return await _measure(call, target)
         raise AssertionError("unreachable")  # tenacity either returns or raises

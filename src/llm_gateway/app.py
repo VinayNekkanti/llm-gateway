@@ -1,11 +1,15 @@
 import json
-from collections.abc import AsyncIterator
+import time
+import uuid
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
+import structlog
 from fastapi import Depends, FastAPI, Query, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from llm_gateway.auth import load_api_keys, require_api_key
 from llm_gateway.cache.exact import ExactCache
@@ -13,11 +17,15 @@ from llm_gateway.cache.semantic import Embedder, FastEmbedEmbedder, SemanticCach
 from llm_gateway.config import Config, load_config
 from llm_gateway.errors import GatewayError, gateway_error_handler
 from llm_gateway.gateway import Gateway
+from llm_gateway.observability import HTTP_LATENCY, HTTP_REQUESTS, setup_logging
 from llm_gateway.providers import ProviderError, build_providers
 from llm_gateway.ratelimit import RateLimiter, enforce_rate_limit
 from llm_gateway.redis_store import RedisStore
 from llm_gateway.router import Router
 from llm_gateway.usage import UsageTracker
+
+logger = structlog.get_logger()
+CallNext = Callable[[Request], Awaitable[Response]]
 
 
 def create_app(
@@ -26,6 +34,8 @@ def create_app(
     embedder: Embedder | None = None,
 ) -> FastAPI:
     """Build the gateway. Tests pass their own config and keys; normal runs load them at startup."""
+
+    setup_logging()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -59,9 +69,47 @@ def create_app(
     app.add_exception_handler(GatewayError, gateway_error_handler)
     app.add_exception_handler(ProviderError, provider_error_handler)
 
+    @app.middleware("http")
+    async def observe(request: Request, call_next: CallNext) -> Response:
+        """Request ID, one log line and metrics for every request."""
+        request_id = request.headers.get("x-request-id") or uuid.uuid4().hex
+        structlog.contextvars.clear_contextvars()
+        structlog.contextvars.bind_contextvars(request_id=request_id)
+        start = time.perf_counter()
+        try:
+            response = await call_next(request)
+        except Exception:
+            logger.exception("unhandled_error", path=request.url.path)
+            raise
+        duration = time.perf_counter() - start
+
+        # Route template ("/v1/chat/completions"), not the raw path: keeps metric labels bounded
+        route = request.scope.get("route")
+        route_path = getattr(route, "path", "unmatched")
+        HTTP_REQUESTS.labels(route_path, request.method, str(response.status_code)).inc()
+        HTTP_LATENCY.labels(route_path).observe(duration)
+        response.headers["x-request-id"] = request_id
+        if route_path not in ("/health", "/metrics"):
+            logger.info(
+                "request",
+                method=request.method,
+                route=route_path,
+                status=response.status_code,
+                duration_ms=round(duration * 1000, 2),
+                key_id=getattr(request.state, "key_id", None),
+                model=response.headers.get("x-gateway-model"),
+                cache=response.headers.get("x-gateway-cache"),
+            )
+        return response
+
     @app.get("/health")
     async def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/metrics", include_in_schema=False)
+    async def metrics() -> Response:
+        # Prometheus scrapes this. Keep it on an internal network: it shows traffic volumes.
+        return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
     @app.get("/v1/models")
     async def list_models(request: Request, key: str = Depends(require_api_key)) -> dict[str, Any]:

@@ -18,6 +18,7 @@ from redis.asyncio import Redis
 from llm_gateway.auth import require_api_key
 from llm_gateway.config import RateLimitConfig
 from llm_gateway.errors import GatewayError
+from llm_gateway.observability import RATE_LIMITED
 from llm_gateway.redis_store import RedisStore
 
 PREFIX = "llmgw:ratelimit:"
@@ -98,6 +99,7 @@ async def enforce_rate_limit(request: Request, key: str = Depends(require_api_ke
         return key
     decision = await limiter.check(key)
     if not decision.allowed:
+        RATE_LIMITED.inc()
         raise GatewayError(
             429,
             f"Rate limit reached ({decision.limit} requests per "

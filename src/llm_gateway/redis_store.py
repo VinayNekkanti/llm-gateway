@@ -1,12 +1,12 @@
-import logging
 import time
 from collections.abc import Awaitable, Callable
 from typing import TypeVar
 
+import structlog
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 T = TypeVar("T")
 
 
@@ -37,7 +37,7 @@ class RedisStore:
         try:
             return await operation(self.client)
         except (RedisError, OSError) as exc:
-            logger.warning("Redis unavailable, continuing without it: %s", exc)
+            logger.warning("redis_unavailable", error=str(exc), cooldown_s=self.cooldown_seconds)
             self._down_until = time.monotonic() + self.cooldown_seconds
             return None
 

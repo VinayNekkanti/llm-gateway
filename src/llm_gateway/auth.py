@@ -45,6 +45,7 @@ async def require_api_key(
     # compare_digest takes the same time whether the keys match or not (no timing attacks)
     for allowed in request.app.state.api_keys:
         if secrets.compare_digest(sent, allowed.encode()):
-            return key_id(allowed)
+            request.state.key_id = key_id(allowed)  # for the request log line
+            return str(request.state.key_id)
 
     raise GatewayError(401, "Invalid API key.", "invalid_request_error", "invalid_api_key")

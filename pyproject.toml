@@ -8,8 +8,10 @@ dependencies = [
     "fastapi>=0.141.1",
     "fastembed>=0.9.0",
     "httpx>=0.28.1",
+    "prometheus-client>=0.26.0",
     "pyyaml>=6.0.3",
     "redis>=8.1.0",
+    "structlog>=26.1.0",
     "tenacity>=9.2.1",
     "uvicorn[standard]>=0.54.0",
 ]
@@ -36,7 +38,7 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-addopts = "--cov=llm_gateway --cov-report=term-missing"
+addopts = "--cov=llm_gateway --cov-report=term-missing --cov-fail-under=80"
 
 [tool.ruff]
 line-length = 100

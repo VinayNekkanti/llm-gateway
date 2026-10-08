@@ -12,8 +12,9 @@ from llm_gateway.cache import is_cacheable_request, is_cacheable_response, reque
 from llm_gateway.cache.exact import ExactCache
 from llm_gateway.cache.semantic import SemanticCache, context_hash, split_request
 from llm_gateway.config import Config
+from llm_gateway.observability import CACHE_LOOKUPS, COST_USD, TOKENS
 from llm_gateway.router import Router, Target
-from llm_gateway.usage import UsageTracker, track_stream
+from llm_gateway.usage import UsageTracker, cost_micro_usd, token_counts, track_stream
 
 
 @dataclass
@@ -50,7 +51,11 @@ class Gateway:
     async def chat(self, body: dict[str, Any], key_id: str, skip_cache: bool = False) -> ChatResult:
         if body.get("stream"):
             return await self._stream(body, key_id)
+        result = await self._chat(body, key_id, skip_cache)
+        CACHE_LOOKUPS.labels(result.headers.get("x-gateway-cache", "skip")).inc()
+        return result
 
+    async def _chat(self, body: dict[str, Any], key_id: str, skip_cache: bool) -> ChatResult:
         target = self.router.resolve(body["model"])
         headers = {"x-gateway-model": target.name, "x-gateway-cache": "skip"}
         use_cache = (
@@ -133,6 +138,12 @@ class Gateway:
         usage: dict[str, Any] | None,
         cache_hit: bool = False,
     ) -> int:
+        if not cache_hit:
+            prompt_tokens, completion_tokens = token_counts(usage)
+            TOKENS.labels(target.name, "prompt").inc(prompt_tokens)
+            TOKENS.labels(target.name, "completion").inc(completion_tokens)
+            cost = cost_micro_usd(target.model, prompt_tokens, completion_tokens)
+            COST_USD.labels(target.name).inc(cost / 1_000_000)
         if self.usage is None:
             return 0
         return await self.usage.record(key_id, target.name, target.model, usage, cache_hit)
