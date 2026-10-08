@@ -1,15 +1,19 @@
 from collections.abc import AsyncIterator
 
 import httpx
-from fastapi import FastAPI, Request, Response
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from llm_gateway.auth import load_api_keys, require_api_key
 from llm_gateway.config import load_config
+from llm_gateway.errors import GatewayError, gateway_error_handler
 
 # Read settings from config.yaml once, when the gateway starts
 config = load_config()
 
 app = FastAPI(title="LLM Gateway")
+app.state.api_keys = load_api_keys()
+app.add_exception_handler(GatewayError, gateway_error_handler)
 
 
 @app.get("/health")
@@ -26,7 +30,7 @@ async def stream_from_upstream(body: dict) -> AsyncIterator[bytes]:
 
 
 @app.post("/v1/chat/completions")
-async def chat_completions(request: Request) -> Response:
+async def chat_completions(request: Request, key: str = Depends(require_api_key)) -> Response:
     # 1. Read the request the app sent us
     body = await request.json()
 

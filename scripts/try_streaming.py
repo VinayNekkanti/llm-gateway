@@ -1,6 +1,8 @@
+import os
+
 from openai import OpenAI
 
-client = OpenAI(base_url="http://127.0.0.1:8000/v1", api_key="not-needed-yet")
+client = OpenAI(base_url=os.environ.get("GATEWAY_URL", "http://127.0.0.1:8000/v1"), api_key=os.environ["GATEWAY_API_KEY"])
 
 stream = client.chat.completions.create(
     model="llama3.2:1b",
