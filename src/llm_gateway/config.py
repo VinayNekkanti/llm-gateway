@@ -33,11 +33,33 @@ class RetryConfig(BaseModel):
     max_backoff_seconds: float = 4.0
 
 
+class RedisConfig(BaseModel):
+    # REDIS_URL in the environment overrides this (used by Docker Compose)
+    url: str = "redis://localhost:6379/0"
+    # Keep this short: a slow Redis must never make the gateway slow
+    timeout_seconds: float = 0.25
+
+
+class ExactCacheConfig(BaseModel):
+    enabled: bool = True
+    ttl_seconds: int = 3600
+    # Only cache requests at or below this temperature (missing temperature counts as 1.0)
+    max_temperature: float = 0.3
+
+
+class CacheConfig(BaseModel):
+    # False: each API key has its own cache entries, so one client never sees another's answers
+    shared_across_keys: bool = False
+    exact: ExactCacheConfig = ExactCacheConfig()
+
+
 class Config(BaseModel):
     providers: dict[str, ProviderConfig]
     # Model names clients can send -> where each one goes
     models: dict[str, ModelConfig]
     retry: RetryConfig = RetryConfig()
+    redis: RedisConfig = RedisConfig()
+    cache: CacheConfig = CacheConfig()
 
     @model_validator(mode="after")
     def check_references(self) -> "Config":
@@ -55,4 +77,7 @@ def load_config() -> Config:
     path = Path(os.environ.get("GATEWAY_CONFIG", "config.yaml"))
     with path.open() as f:
         data = yaml.safe_load(f)
-    return Config.model_validate(data)
+    config = Config.model_validate(data)
+    if os.environ.get("REDIS_URL"):
+        config.redis.url = os.environ["REDIS_URL"]
+    return config

@@ -42,3 +42,15 @@ models:
   #   provider: anthropic
   #   model: claude-opus-5-5
   #   drop_params: [temperature, top_p] # this model rejects sampling parameters
+
+# Redis holds the cache (REDIS_URL in the environment overrides this)
+redis:
+  url: redis://localhost:6379/0
+  timeout_seconds: 0.25 # a slow Redis must never slow down the gateway
+
+cache:
+  shared_across_keys: false # each API key gets its own cache entries
+  exact:
+    enabled: true
+    ttl_seconds: 3600
+    max_temperature: 0.3 # only cache low-randomness requests

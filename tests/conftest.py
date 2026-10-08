@@ -1,6 +1,8 @@
+import os
 from collections.abc import Iterator
 
 import pytest
+import redis
 import respx
 from fastapi.testclient import TestClient
 
@@ -12,6 +14,9 @@ ANTHROPIC_URL = "http://anthropic.test/v1/messages"
 FLAKY_URL = "http://flaky.test/v1/chat/completions"
 API_KEY = "test-key"
 AUTH = {"Authorization": f"Bearer {API_KEY}"}
+
+# Tests use their own Redis database (15) and wipe it, so they never touch real data
+TEST_REDIS_URL = os.environ.get("TEST_REDIS_URL", "redis://localhost:6379/15")
 
 # Kept for older tests: the default upstream is the Ollama provider
 UPSTREAM_URL = OLLAMA_URL
@@ -59,6 +64,7 @@ def make_config(**overrides: object) -> Config:
         },
         # No waiting between retries, so tests run instantly
         "retry": {"max_attempts": 3, "initial_backoff_seconds": 0, "max_backoff_seconds": 0},
+        "redis": {"url": TEST_REDIS_URL},
     }
     data.update(overrides)
     return Config.model_validate(data)
@@ -67,6 +73,24 @@ def make_config(**overrides: object) -> Config:
 @pytest.fixture(autouse=True)
 def anthropic_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TEST_ANTHROPIC_KEY", "sk-test")
+
+
+def redis_is_up() -> bool:
+    try:
+        return bool(redis.Redis.from_url(TEST_REDIS_URL, socket_timeout=0.5).ping())
+    except redis.RedisError:
+        return False
+
+
+@pytest.fixture
+def clean_redis() -> Iterator[redis.Redis]:
+    """For tests that need a real Redis: skips if none is running, wipes the test DB."""
+    if not redis_is_up():
+        pytest.skip("Redis is not running")
+    client = redis.Redis.from_url(TEST_REDIS_URL)
+    client.flushdb()
+    yield client
+    client.flushdb()
 
 
 @pytest.fixture

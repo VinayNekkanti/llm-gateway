@@ -8,10 +8,13 @@ from fastapi import Depends, FastAPI, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from llm_gateway.auth import load_api_keys, require_api_key
+from llm_gateway.cache.exact import ExactCache
 from llm_gateway.config import Config, load_config
 from llm_gateway.errors import GatewayError, gateway_error_handler
+from llm_gateway.gateway import Gateway
 from llm_gateway.providers import ProviderError, build_providers
-from llm_gateway.router import Router, Target
+from llm_gateway.redis_store import RedisStore
+from llm_gateway.router import Router
 
 
 def create_app(config: Config | None = None, api_keys: list[str] | None = None) -> FastAPI:
@@ -23,10 +26,16 @@ def create_app(config: Config | None = None, api_keys: list[str] | None = None) 
         app.state.config = config or load_config()
         app.state.api_keys = api_keys or load_api_keys()
         # One shared HTTP client: reuses connections to the LLM instead of opening one per request
+        cfg: Config = app.state.config
+        store = RedisStore(cfg.redis.url, cfg.redis.timeout_seconds)
         async with httpx.AsyncClient() as http:
-            providers = build_providers(app.state.config, http)
-            app.state.router = Router(app.state.config, providers)
+            router = Router(cfg, build_providers(cfg, http))
+            exact_cache = (
+                ExactCache(store, cfg.cache.exact.ttl_seconds) if cfg.cache.exact.enabled else None
+            )
+            app.state.gateway = Gateway(cfg, router, exact_cache)
             yield
+        await store.close()
         # Leaving the "async with" closes the client when the server stops
 
     app = FastAPI(title="LLM Gateway", lifespan=lifespan)
@@ -51,19 +60,17 @@ def create_app(config: Config | None = None, api_keys: list[str] | None = None) 
         # 1. Read and check the request the app sent us
         body = await read_chat_request(request)
 
-        # 2. Send it to the requested model, with retries and fallback models
-        router: Router = request.app.state.router
+        # 2. Run it through the pipeline: cache, retries, fallback
+        gateway: Gateway = request.app.state.gateway
+        skip_cache = request.headers.get("x-gateway-cache", "").lower() == "skip"
+        result = await gateway.chat(body, key, skip_cache=skip_cache)
 
-        # 3a. Streaming: send pieces back as they arrive
-        if body.get("stream"):
-            chunks, target = await router.open_stream(body)
+        # 3. Send back either a stream or the full answer
+        if result.stream is not None:
             return StreamingResponse(
-                chunks, media_type="text/event-stream", headers=served_by(target)
+                result.stream, media_type="text/event-stream", headers=result.headers
             )
-
-        # 3b. Not streaming: wait for the full answer, then send it back
-        result, target = await router.chat(body)
-        return JSONResponse(result, headers=served_by(target))
+        return JSONResponse(result.body, headers=result.headers)
 
     return app
 
@@ -80,11 +87,6 @@ async def read_chat_request(request: Request) -> dict[str, Any]:
     if not isinstance(body.get("messages"), list) or not body["messages"]:
         raise GatewayError(400, "'messages' must be a non-empty list.", "invalid_request_error")
     return body
-
-
-def served_by(target: Target) -> dict[str, str]:
-    # Tells the client which model actually answered (differs from the request after a fallback)
-    return {"x-gateway-model": target.name}
 
 
 async def provider_error_handler(request: Request, exc: Exception) -> JSONResponse:
