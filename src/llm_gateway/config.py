@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 from typing import Literal
 
@@ -42,7 +43,6 @@ class RetryConfig(BaseModel):
 
 
 class RedisConfig(BaseModel):
-    # REDIS_URL in the environment overrides this (used by Docker Compose)
     url: str = "redis://localhost:6379/0"
     # Keep this short: a slow Redis must never make the gateway slow
     timeout_seconds: float = 0.25
@@ -100,12 +100,30 @@ class Config(BaseModel):
         return self
 
 
+# ${NAME} or ${NAME:-default}
+ENV_VAR = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
+
+
+def expand_env(text: str) -> str:
+    """Replace ${NAME:-default} with the environment variable NAME (or the default).
+
+    Lets one config.yaml work locally and in Docker, where addresses differ.
+    """
+
+    def replace(match: re.Match[str]) -> str:
+        name, default = match.group(1), match.group(2)
+        value = os.environ.get(name)
+        if value is not None:
+            return value
+        if default is not None:
+            return default
+        raise ValueError(f"config.yaml uses ${{{name}}} but it is not set")
+
+    return ENV_VAR.sub(replace, text)
+
+
 def load_config() -> Config:
     # Use the file named in GATEWAY_CONFIG if set, otherwise config.yaml
     path = Path(os.environ.get("GATEWAY_CONFIG", "config.yaml"))
-    with path.open() as f:
-        data = yaml.safe_load(f)
-    config = Config.model_validate(data)
-    if os.environ.get("REDIS_URL"):
-        config.redis.url = os.environ["REDIS_URL"]
-    return config
+    data = yaml.safe_load(expand_env(path.read_text()))
+    return Config.model_validate(data)

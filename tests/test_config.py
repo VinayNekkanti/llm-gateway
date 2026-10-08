@@ -55,3 +55,27 @@ def test_unknown_fallback_fails_fast(tmp_path: Path, monkeypatch: pytest.MonkeyP
     write(tmp_path, monkeypatch, VALID + "    fallbacks: [missing]\n")
     with pytest.raises(ValidationError, match="unknown fallback"):
         load_config()
+
+
+def test_env_vars_in_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    from llm_gateway.config import expand_env
+
+    monkeypatch.setenv("GW_TEST_URL", "http://from-env")
+    monkeypatch.delenv("GW_MISSING", raising=False)
+    assert expand_env("url: ${GW_TEST_URL:-http://default}") == "url: http://from-env"
+    assert expand_env("url: ${GW_MISSING:-http://default}") == "url: http://default"
+    with pytest.raises(ValueError, match="GW_MISSING"):
+        expand_env("url: ${GW_MISSING}")
+
+
+def test_main_starts_uvicorn(monkeypatch: pytest.MonkeyPatch) -> None:
+    import uvicorn
+
+    from llm_gateway import main
+
+    calls: list = []
+    monkeypatch.setattr(uvicorn, "run", lambda *args, **kwargs: calls.append((args, kwargs)))
+    monkeypatch.setenv("PORT", "9000")
+    main()
+    assert calls[0][0] == ("llm_gateway.app:app",)
+    assert calls[0][1]["port"] == 9000

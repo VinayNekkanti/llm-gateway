@@ -41,3 +41,22 @@ jobs:
 
       - name: Test
         run: uv run pytest
+
+  docker:
+    # Makes sure the image still builds (and the gateway starts) on every change
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t llm-gateway .
+
+      - name: Start and check health
+        run: |
+          docker run -d --name gw -p 8000:8000 -e GATEWAY_API_KEYS=ci-key llm-gateway
+          for i in $(seq 1 30); do
+            curl -sf localhost:8000/health && exit 0
+            sleep 1
+          done
+          docker logs gw
+          exit 1

@@ -1,10 +1,12 @@
 # Settings for the LLM gateway (no secrets here: API keys go in .env)
+# ${NAME:-default} reads environment variable NAME, or uses the default when it's not set.
+# Docker Compose sets these so the same file works inside containers.
 
 # Where requests can be sent
 providers:
   ollama:
     type: openai # Ollama speaks the OpenAI format
-    base_url: http://localhost:11434/v1
+    base_url: ${OLLAMA_BASE_URL:-http://localhost:11434/v1}
     timeout_seconds: 60
 
   # Uncomment to use Claude models (needs ANTHROPIC_API_KEY in .env)
@@ -48,9 +50,9 @@ models:
   #     input_per_million: 4.00
   #     output_per_million: 20.00
 
-# Redis holds the cache (REDIS_URL in the environment overrides this)
+# Redis holds the cache, rate limit counters and usage numbers
 redis:
-  url: redis://localhost:6379/0
+  url: ${REDIS_URL:-redis://localhost:6379/0}
   timeout_seconds: 0.25 # a slow Redis must never slow down the gateway
 
 cache:

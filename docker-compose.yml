@@ -1,0 +1,37 @@
+# docker compose up --build   -> gateway on http://localhost:8000 plus Redis
+# Needs a .env file (cp .env.example .env) and Ollama running on this machine.
+
+services:
+  gateway:
+    build: .
+    ports:
+      - "${GATEWAY_PORT:-8000}:8000" # GATEWAY_PORT=8080 docker compose up to change it
+    env_file: .env # GATEWAY_API_KEYS and any provider keys
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      # Ollama runs on the host machine, not in a container
+      OLLAMA_BASE_URL: http://host.docker.internal:11434/v1
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # makes the name work on Linux too
+    volumes:
+      # Edit config.yaml without rebuilding (restart the container to apply)
+      - ./config.yaml:/app/config.yaml:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  redis:
+    image: redis:8
+    command: ["redis-server", "--appendonly", "yes"] # keep data across restarts
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  redis-data:
