@@ -158,5 +158,7 @@ class Gateway:
         if parts is None:
             return None
         question, earlier, params = parts
+        if len(question) > self.semantic_cache.max_question_chars:
+            return None  # too long to be worth embedding (see SemanticCacheConfig)
         vector = await self.semantic_cache.embed(question)
         return SemanticKey(question, vector, context_hash(earlier, params, model_id, scope))

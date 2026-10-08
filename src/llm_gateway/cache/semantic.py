@@ -102,25 +102,35 @@ def to_fp32(vector: list[float]) -> bytes:
     return struct.pack(f"<{len(vector)}f", *vector)
 
 
-def _first_match(found: Any) -> tuple[bytes, float, bytes | None] | None:
-    """VSIM's reply: redis-py gives {element: [score, attributes]}; raw Redis gives a flat list."""
+# How many nearest neighbours to check. The nearest one can be a look-alike that the text
+# checks reject; a valid match may be just behind it.
+CANDIDATES = 5
+
+
+def _matches(found: Any) -> list[tuple[bytes, float, bytes | None]]:
+    """VSIM's reply, nearest first: redis-py gives {element: [score, attributes]};
+    raw Redis gives a flat list [element, score, attributes, ...]."""
     if not found:
-        return None
+        return []
     if isinstance(found, dict):
-        element, (score, attributes) = next(iter(found.items()))
-    else:
-        element, score, attributes = found[0], found[1], found[2]
-    return element, float(score), attributes
+        return [(element, float(score), attrs) for element, (score, attrs) in found.items()]
+    return [(found[i], float(found[i + 1]), found[i + 2]) for i in range(0, len(found) - 2, 3)]
 
 
 class SemanticCache:
     def __init__(
-        self, store: RedisStore, embedder: Embedder, threshold: float, ttl_seconds: int
+        self,
+        store: RedisStore,
+        embedder: Embedder,
+        threshold: float,
+        ttl_seconds: int,
+        max_question_chars: int = 300,
     ) -> None:
         self.store = store
         self.embedder = embedder
         self.threshold = threshold
         self.ttl_seconds = ttl_seconds
+        self.max_question_chars = max_question_chars
 
     async def embed(self, question: str) -> list[float]:
         # The model runs on the CPU; a worker thread keeps the event loop free for other requests
@@ -134,28 +144,32 @@ class SemanticCache:
         async def search(redis: Redis) -> Any:
             return await redis.execute_command(
                 "VSIM", INDEX_KEY, "FP32", to_fp32(vector),
-                "WITHSCORES", "WITHATTRIBS", "COUNT", 1, "FILTER", f'.ctx == "{ctx}"',
+                "WITHSCORES", "WITHATTRIBS", "COUNT", CANDIDATES, "FILTER", f'.ctx == "{ctx}"',
             )  # fmt: skip
 
-        match = _first_match(await self.store.call(search))
-        if match is None:
-            return None
-        element, score, raw_attributes = match
-        attributes = json.loads(raw_attributes) if raw_attributes else {}
-        # Redis scores are (1 + cosine) / 2, from 0 (opposite) to 1 (identical)
-        similarity = 2 * score - 1
-        if similarity < self.threshold:
-            return None
-        if likely_different_question(question, attributes.get("q", "")):
-            return None
+        for element, score, raw_attributes in _matches(await self.store.call(search)):
+            # Redis scores are (1 + cosine) / 2, from 0 (opposite) to 1 (identical)
+            similarity = 2 * score - 1
+            if similarity < self.threshold:
+                return None  # results are sorted, so the rest are even less similar
+            attributes = json.loads(raw_attributes) if raw_attributes else {}
+            if likely_different_question(question, attributes.get("q", "")):
+                continue  # a look-alike with a different answer: try the next candidate
 
-        raw = await self.store.call(lambda r: r.get(RESPONSE_PREFIX + element.decode()))
-        if raw is None:
-            # The answer expired (TTL) but its vector is still indexed: clean it up lazily
-            await self.store.call(lambda r: r.execute_command("VREM", INDEX_KEY, element))
-            return None
-        answer: dict[str, Any] = json.loads(raw)
-        return answer, similarity
+            raw = await self._answer(element)
+            if raw is None:
+                # The answer expired (TTL) but its vector is still indexed: clean it up lazily
+                await self._forget(element)
+                continue
+            answer: dict[str, Any] = json.loads(raw)
+            return answer, similarity
+        return None
+
+    async def _answer(self, element: bytes) -> bytes | str | None:
+        return await self.store.call(lambda r: r.get(RESPONSE_PREFIX + element.decode()))
+
+    async def _forget(self, element: bytes) -> None:
+        await self.store.call(lambda r: r.execute_command("VREM", INDEX_KEY, element))
 
     async def store_answer(
         self, question: str, vector: list[float], ctx: str, result: dict[str, Any]

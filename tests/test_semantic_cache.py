@@ -24,6 +24,9 @@ class FakeEmbedder:
             "Tell me a joke.": [0.0, 0.0, 1.0],
             # Very close vector but a different question: the text checks must block this
             "What is the capital of Germany?": [a, b, 0.0],
+            # Identical vector to the rewording, so it is the nearest match, but it's a
+            # one-word swap ("France's" -> "Spain's") that the text checks reject
+            "What's Spain's capital city?": [a, b, 0.0],
         }
         self.calls = 0
 
@@ -167,10 +170,44 @@ def test_context_hash_depends_on_history_and_scope() -> None:
     assert base != context_hash([], {"max_tokens": 5}, "p/m", "k")
 
 
-def test_first_match_reads_both_reply_formats() -> None:
-    from llm_gateway.cache.semantic import _first_match
+def test_matches_reads_both_reply_formats() -> None:
+    from llm_gateway.cache.semantic import _matches
 
-    assert _first_match({b"a": [0.9, b"{}"]}) == (b"a", 0.9, b"{}")
-    assert _first_match([b"a", b"0.9", b"{}"]) == (b"a", 0.9, b"{}")
-    assert _first_match({}) is None
-    assert _first_match(None) is None
+    assert _matches({b"a": [0.9, b"{}"], b"b": [0.8, None]}) == [
+        (b"a", 0.9, b"{}"),
+        (b"b", 0.8, None),
+    ]
+    assert _matches([b"a", b"0.9", b"{}", b"b", b"0.8", None]) == [
+        (b"a", 0.9, b"{}"),
+        (b"b", 0.8, None),
+    ]
+    assert _matches({}) == []
+    assert _matches(None) == []
+
+
+def test_rejected_nearest_match_does_not_hide_a_valid_one(
+    semantic_client: TestClient, upstream: respx.MockRouter
+) -> None:
+    # Found by the benchmark: only checking the single nearest neighbour meant a rejected
+    # look-alike could hide a valid match right behind it
+    upstream.post(OLLAMA_URL).mock(
+        side_effect=[
+            httpx.Response(200, json=chat_response("Paris")),
+            httpx.Response(200, json=chat_response("Madrid")),
+        ]
+    )
+    ask(semantic_client, "What is the capital of France?")
+    ask(semantic_client, "What's Spain's capital city?")
+
+    response = ask(semantic_client, "What's France's capital city?")
+
+    assert response.headers["x-gateway-cache"] == "semantic-hit"
+    assert response.json()["choices"][0]["message"]["content"] == "Paris"
+
+
+def test_long_questions_skip_semantic_cache(
+    semantic_client: TestClient, embedder: FakeEmbedder, upstream: respx.MockRouter
+) -> None:
+    upstream.post(OLLAMA_URL).mock(return_value=httpx.Response(200, json=chat_response()))
+    ask(semantic_client, "word " * 100)  # 500 characters, over the 300 default
+    assert embedder.calls == 0

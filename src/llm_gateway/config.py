@@ -61,6 +61,9 @@ class SemanticCacheConfig(BaseModel):
     # Minimum cosine similarity to reuse an answer. Tuned with scripts/tune_semantic_cache.py
     similarity_threshold: float = 0.94
     ttl_seconds: int = 3600
+    # Embedding time grows with length (~2 ms short question, ~9 ms for 100 words), and long
+    # prompts rarely get reworded matches, so longer questions skip the semantic cache
+    max_question_chars: int = 300
 
 
 class CacheConfig(BaseModel):

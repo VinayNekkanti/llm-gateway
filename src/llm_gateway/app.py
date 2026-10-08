@@ -163,7 +163,13 @@ def build_semantic_cache(
         return None
     # Loads the embedding model once at startup (downloads it the first time)
     embedder = embedder or FastEmbedEmbedder(semantic.embedding_model, semantic.model_cache_dir)
-    return SemanticCache(store, embedder, semantic.similarity_threshold, semantic.ttl_seconds)
+    return SemanticCache(
+        store,
+        embedder,
+        semantic.similarity_threshold,
+        semantic.ttl_seconds,
+        semantic.max_question_chars,
+    )
 
 
 async def read_chat_request(request: Request) -> dict[str, Any]:
