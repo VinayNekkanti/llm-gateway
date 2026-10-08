@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from llm_gateway.auth import load_api_keys, require_api_key
 from llm_gateway.cache.exact import ExactCache
+from llm_gateway.cache.semantic import Embedder, FastEmbedEmbedder, SemanticCache
 from llm_gateway.config import Config, load_config
 from llm_gateway.errors import GatewayError, gateway_error_handler
 from llm_gateway.gateway import Gateway
@@ -18,7 +19,11 @@ from llm_gateway.redis_store import RedisStore
 from llm_gateway.router import Router
 
 
-def create_app(config: Config | None = None, api_keys: list[str] | None = None) -> FastAPI:
+def create_app(
+    config: Config | None = None,
+    api_keys: list[str] | None = None,
+    embedder: Embedder | None = None,
+) -> FastAPI:
     """Build the gateway. Tests pass their own config and keys; normal runs load them at startup."""
 
     @asynccontextmanager
@@ -34,7 +39,9 @@ def create_app(config: Config | None = None, api_keys: list[str] | None = None) 
             exact_cache = (
                 ExactCache(store, cfg.cache.exact.ttl_seconds) if cfg.cache.exact.enabled else None
             )
-            app.state.gateway = Gateway(cfg, router, exact_cache)
+            app.state.gateway = Gateway(
+                cfg, router, exact_cache, build_semantic_cache(cfg, store, embedder)
+            )
             app.state.rate_limiter = (
                 RateLimiter(store, cfg.rate_limit) if cfg.rate_limit.enabled else None
             )
@@ -79,6 +86,17 @@ def create_app(config: Config | None = None, api_keys: list[str] | None = None) 
         return JSONResponse(result.body, headers=result.headers)
 
     return app
+
+
+def build_semantic_cache(
+    cfg: Config, store: RedisStore, embedder: Embedder | None = None
+) -> SemanticCache | None:
+    semantic = cfg.cache.semantic
+    if not semantic.enabled:
+        return None
+    # Loads the embedding model once at startup (downloads it the first time)
+    embedder = embedder or FastEmbedEmbedder(semantic.embedding_model, semantic.model_cache_dir)
+    return SemanticCache(store, embedder, semantic.similarity_threshold, semantic.ttl_seconds)
 
 
 async def read_chat_request(request: Request) -> dict[str, Any]:

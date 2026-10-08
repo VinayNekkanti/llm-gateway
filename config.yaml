@@ -50,10 +50,16 @@ redis:
 
 cache:
   shared_across_keys: false # each API key gets its own cache entries
+  max_temperature: 0.3 # only cache low-randomness requests
   exact:
     enabled: true
     ttl_seconds: 3600
-    max_temperature: 0.3 # only cache low-randomness requests
+  # Reuses answers for questions that mean the same thing (see docs/semantic-cache.md)
+  semantic:
+    enabled: true
+    embedding_model: BAAI/bge-small-en-v1.5
+    similarity_threshold: 0.94 # tuned: 0 wrong answers on 90 labeled pairs
+    ttl_seconds: 3600
 
 # Requests allowed per API key (sliding window); over the limit gets 429 + Retry-After
 rate_limit:

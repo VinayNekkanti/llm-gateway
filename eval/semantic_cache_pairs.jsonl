@@ -1,0 +1,60 @@
+{"a": "What is the capital of France?", "b": "What's France's capital city?", "same": true}
+{"a": "How do I reverse a list in Python?", "b": "How can I reverse a Python list?", "same": true}
+{"a": "What is the boiling point of water?", "b": "At what temperature does water boil?", "same": true}
+{"a": "Who wrote Pride and Prejudice?", "b": "Who is the author of Pride and Prejudice?", "same": true}
+{"a": "How many days are in a leap year?", "b": "How many days does a leap year have?", "same": true}
+{"a": "What does HTTP stand for?", "b": "What is HTTP short for?", "same": true}
+{"a": "Explain what a REST API is.", "b": "Can you explain what a REST API is?", "same": true}
+{"a": "How do I install numpy?", "b": "What's the command to install numpy?", "same": true}
+{"a": "What is the speed of light?", "b": "How fast does light travel?", "same": true}
+{"a": "Translate 'good morning' into Spanish.", "b": "How do you say 'good morning' in Spanish?", "same": true}
+{"a": "What is photosynthesis?", "b": "Can you explain photosynthesis?", "same": true}
+{"a": "How do I make a git commit?", "b": "How do I commit changes in git?", "same": true}
+{"a": "What's the tallest mountain in the world?", "b": "Which mountain is the highest on Earth?", "same": true}
+{"a": "Give me a synonym for happy.", "b": "What's another word for happy?", "same": true}
+{"a": "How do I center a div in CSS?", "b": "How can I center a div using CSS?", "same": true}
+{"a": "What is the difference between TCP and UDP?", "b": "How does TCP differ from UDP?", "same": true}
+{"a": "Summarize the plot of Hamlet.", "b": "Give me a summary of Hamlet's plot.", "same": true}
+{"a": "What causes rain?", "b": "Why does it rain?", "same": true}
+{"a": "How do I read a file in Python?", "b": "What's the way to read a file with Python?", "same": true}
+{"a": "What is machine learning?", "b": "Can you explain what machine learning is?", "same": true}
+{"a": "How many continents are there?", "b": "What is the number of continents?", "same": true}
+{"a": "What is the largest planet in our solar system?", "b": "Which planet in the solar system is the biggest?", "same": true}
+{"a": "How do I convert a string to an integer in Python?", "b": "How can I turn a string into an int in Python?", "same": true}
+{"a": "What year did World War II end?", "b": "When did WW2 end?", "same": true}
+{"a": "What is an LLM gateway?", "b": "Can you explain what an LLM gateway is?", "same": true}
+{"a": "hello, what is the capital of japan", "b": "What is the capital of Japan?", "same": true}
+{"a": "What is the square root of 144?", "b": "what's the square root of 144", "same": true}
+{"a": "Define recursion.", "b": "What is recursion?", "same": true}
+{"a": "How do I exit vim?", "b": "How can I quit the vim editor?", "same": true}
+{"a": "What is Docker used for?", "b": "What do people use Docker for?", "same": true}
+{"a": "What is the capital of France?", "b": "What is the capital of Germany?", "same": false}
+{"a": "How do I reverse a list in Python?", "b": "How do I sort a list in Python?", "same": false}
+{"a": "What is the boiling point of water?", "b": "What is the freezing point of water?", "same": false}
+{"a": "Who wrote Pride and Prejudice?", "b": "Who wrote Sense and Sensibility?", "same": false}
+{"a": "How many days are in a leap year?", "b": "How many days are in a regular year?", "same": false}
+{"a": "What is 15% of 200?", "b": "What is 20% of 200?", "same": false}
+{"a": "How do I install numpy?", "b": "How do I uninstall numpy?", "same": false}
+{"a": "Translate 'good morning' into Spanish.", "b": "Translate 'good morning' into French.", "same": false}
+{"a": "How do I make a git commit?", "b": "How do I undo a git commit?", "same": false}
+{"a": "What is the difference between TCP and UDP?", "b": "What is the difference between HTTP and HTTPS?", "same": false}
+{"a": "Summarize the plot of Hamlet.", "b": "Summarize the plot of Macbeth.", "same": false}
+{"a": "How do I read a file in Python?", "b": "How do I write a file in Python?", "same": false}
+{"a": "What year did World War II end?", "b": "What year did World War I end?", "same": false}
+{"a": "Is Python a compiled language?", "b": "Is Python an interpreted language?", "same": false}
+{"a": "What is the largest planet in our solar system?", "b": "What is the smallest planet in our solar system?", "same": false}
+{"a": "How do I convert a string to an integer in Python?", "b": "How do I convert an integer to a string in Python?", "same": false}
+{"a": "Write a haiku about the ocean.", "b": "Write a haiku about the mountains.", "same": false}
+{"a": "What are the benefits of exercise?", "b": "What are the risks of exercise?", "same": false}
+{"a": "How do I center a div in CSS?", "b": "How do I hide a div in CSS?", "same": false}
+{"a": "What is the population of Tokyo?", "b": "What is the population of New York?", "same": false}
+{"a": "Should I use tabs for indentation?", "b": "Should I not use tabs for indentation?", "same": false}
+{"a": "What is the square root of 144?", "b": "What is the square root of 169?", "same": false}
+{"a": "Explain quantum computing to a child.", "b": "Explain quantum computing to a physicist.", "same": false}
+{"a": "How do I start a Docker container?", "b": "How do I stop a Docker container?", "same": false}
+{"a": "What is the capital of Japan?", "b": "What is the currency of Japan?", "same": false}
+{"a": "How do I bake bread?", "b": "What is the capital of France?", "same": false}
+{"a": "What is machine learning?", "b": "What is the best pizza topping?", "same": false}
+{"a": "Recommend a good sci-fi book.", "b": "Recommend a good fantasy book.", "same": false}
+{"a": "How long should I boil an egg for a soft yolk?", "b": "How long should I boil an egg for a hard yolk?", "same": false}
+{"a": "Convert 10 miles to kilometers.", "b": "Convert 10 kilometers to miles.", "same": false}

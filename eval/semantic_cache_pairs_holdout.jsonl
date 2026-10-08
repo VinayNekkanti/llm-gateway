@@ -1,0 +1,30 @@
+{"a": "How do I delete a branch in git?", "b": "What's the way to remove a git branch?", "same": true}
+{"a": "What is the chemical symbol for gold?", "b": "Which element symbol stands for gold?", "same": true}
+{"a": "How do I list files in a directory in Linux?", "b": "What command lists the files in a Linux folder?", "same": true}
+{"a": "Who painted the Mona Lisa?", "b": "Who is the painter of the Mona Lisa?", "same": true}
+{"a": "What is a black hole?", "b": "Can you explain what a black hole is?", "same": true}
+{"a": "How do I check my Python version?", "b": "How can I see which version of Python I have?", "same": true}
+{"a": "What does CPU stand for?", "b": "What is the full form of CPU?", "same": true}
+{"a": "How many legs does a spider have?", "b": "How many legs do spiders have?", "same": true}
+{"a": "What is the main ingredient in guacamole?", "b": "What is guacamole mostly made of?", "same": true}
+{"a": "How do I make a virtual environment in Python?", "b": "How do I create a Python virtual environment?", "same": true}
+{"a": "What is inflation in economics?", "b": "Explain inflation in economics.", "same": true}
+{"a": "Why is the sky blue?", "b": "What makes the sky look blue?", "same": true}
+{"a": "How do I merge two dictionaries in Python?", "b": "What's the best way to combine two dicts in Python?", "same": true}
+{"a": "What is the longest river in the world?", "b": "Which river is the longest on Earth?", "same": true}
+{"a": "How do I find the length of a string in JavaScript?", "b": "How can I get a string's length in JavaScript?", "same": true}
+{"a": "How do I delete a branch in git?", "b": "How do I rename a branch in git?", "same": false}
+{"a": "What is the chemical symbol for gold?", "b": "What is the chemical symbol for silver?", "same": false}
+{"a": "Who painted the Mona Lisa?", "b": "Who painted The Starry Night?", "same": false}
+{"a": "How do I check my Python version?", "b": "How do I upgrade my Python version?", "same": false}
+{"a": "How many legs does a spider have?", "b": "How many legs does an insect have?", "same": false}
+{"a": "What is the longest river in the world?", "b": "What is the widest river in the world?", "same": false}
+{"a": "How do I merge two dictionaries in Python?", "b": "How do I merge two lists in Python?", "same": false}
+{"a": "What is 7 times 8?", "b": "What is 7 times 9?", "same": false}
+{"a": "Is coffee good for you?", "b": "Is coffee bad for you?", "same": false}
+{"a": "How do I find the length of a string in JavaScript?", "b": "How do I find the length of an array in JavaScript?", "same": false}
+{"a": "What time zone is London in?", "b": "What time zone is Paris in?", "same": false}
+{"a": "Can dogs eat chocolate?", "b": "Can dogs not eat chocolate?", "same": false}
+{"a": "Convert 100 Fahrenheit to Celsius.", "b": "Convert 100 Celsius to Fahrenheit.", "same": false}
+{"a": "What is the best way to learn Spanish?", "b": "What is the best way to learn Mandarin?", "same": false}
+{"a": "How do I make my code faster?", "b": "How do I make my code more readable?", "same": false}

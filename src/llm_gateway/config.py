@@ -43,14 +43,25 @@ class RedisConfig(BaseModel):
 class ExactCacheConfig(BaseModel):
     enabled: bool = True
     ttl_seconds: int = 3600
-    # Only cache requests at or below this temperature (missing temperature counts as 1.0)
-    max_temperature: float = 0.3
+
+
+class SemanticCacheConfig(BaseModel):
+    enabled: bool = False
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
+    # Where the embedding model is downloaded to (None = fastembed's default temp folder)
+    model_cache_dir: str | None = None
+    # Minimum cosine similarity to reuse an answer. Tuned with scripts/tune_semantic_cache.py
+    similarity_threshold: float = 0.94
+    ttl_seconds: int = 3600
 
 
 class CacheConfig(BaseModel):
     # False: each API key has its own cache entries, so one client never sees another's answers
     shared_across_keys: bool = False
+    # Only cache requests at or below this temperature (missing temperature counts as 1.0)
+    max_temperature: float = 0.3
     exact: ExactCacheConfig = ExactCacheConfig()
+    semantic: SemanticCacheConfig = SemanticCacheConfig()
 
 
 class RateLimitConfig(BaseModel):
