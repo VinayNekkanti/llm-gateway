@@ -12,7 +12,8 @@ from llm_gateway.cache import is_cacheable_request, is_cacheable_response, reque
 from llm_gateway.cache.exact import ExactCache
 from llm_gateway.cache.semantic import SemanticCache, context_hash, split_request
 from llm_gateway.config import Config
-from llm_gateway.router import Router
+from llm_gateway.router import Router, Target
+from llm_gateway.usage import UsageTracker, track_stream
 
 
 @dataclass
@@ -38,17 +39,17 @@ class Gateway:
         router: Router,
         exact_cache: ExactCache | None,
         semantic_cache: SemanticCache | None = None,
+        usage: UsageTracker | None = None,
     ) -> None:
         self.config = config
         self.router = router
         self.exact_cache = exact_cache
         self.semantic_cache = semantic_cache
+        self.usage = usage
 
     async def chat(self, body: dict[str, Any], key_id: str, skip_cache: bool = False) -> ChatResult:
         if body.get("stream"):
-            # Streams aren't cached: the answer is sent piece by piece as it's generated
-            stream, target = await self.router.open_stream(body)
-            return ChatResult(stream=stream, headers={"x-gateway-model": target.name})
+            return await self._stream(body, key_id)
 
         target = self.router.resolve(body["model"])
         headers = {"x-gateway-model": target.name, "x-gateway-cache": "skip"}
@@ -70,6 +71,7 @@ class Gateway:
                 fingerprint = request_fingerprint(body, model_id, scope)
                 cached = await self.exact_cache.get(fingerprint)
                 if cached is not None:
+                    await self._record(key_id, target, cached.get("usage"), cache_hit=True)
                     return ChatResult(body=cached, headers={**headers, "x-gateway-cache": "hit"})
 
             # 2. Same meaning: embed the question and search for a close enough earlier one
@@ -80,6 +82,7 @@ class Gateway:
                 )
                 if found is not None:
                     answer, similarity = found
+                    await self._record(key_id, target, answer.get("usage"), cache_hit=True)
                     return ChatResult(
                         body=answer,
                         headers={
@@ -91,6 +94,8 @@ class Gateway:
 
         result, served_by = await self.router.chat(body)
         headers["x-gateway-model"] = served_by.name
+        cost = await self._record(key_id, served_by, result.get("usage"))
+        headers["x-gateway-cost-usd"] = f"{cost / 1_000_000:.6f}"
 
         # Only cache good answers from the model that was asked for (not a fallback's answer)
         if served_by.name == target.name and is_cacheable_response(result):
@@ -102,6 +107,35 @@ class Gateway:
                 )
 
         return ChatResult(body=result, headers=headers)
+
+    async def _stream(self, body: dict[str, Any], key_id: str) -> ChatResult:
+        # Streams aren't cached: the answer is sent piece by piece as it's generated.
+        # Always ask the provider for token usage (sent in the last chunk) so we can bill it.
+        client_wants_usage = bool((body.get("stream_options") or {}).get("include_usage"))
+        upstream_body = {
+            **body,
+            "stream_options": {**(body.get("stream_options") or {}), "include_usage": True},
+        }
+        chunks, target = await self.router.open_stream(upstream_body)
+
+        async def on_usage(usage: dict[str, Any] | None) -> None:
+            await self._record(key_id, target, usage)
+
+        return ChatResult(
+            stream=track_stream(chunks, client_wants_usage, on_usage),
+            headers={"x-gateway-model": target.name},
+        )
+
+    async def _record(
+        self,
+        key_id: str,
+        target: Target,
+        usage: dict[str, Any] | None,
+        cache_hit: bool = False,
+    ) -> int:
+        if self.usage is None:
+            return 0
+        return await self.usage.record(key_id, target.name, target.model, usage, cache_hit)
 
     async def _semantic_key(
         self, body: dict[str, Any], model_id: str, scope: str

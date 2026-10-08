@@ -53,7 +53,12 @@ def make_config(**overrides: object) -> Config:
         },
         "models": {
             "llama3.2:1b": {"provider": "ollama", "model": "llama3.2:1b"},
-            "smart": {"provider": "ollama", "model": "llama3.2"},
+            "smart": {
+                "provider": "ollama",
+                "model": "llama3.2",
+                # $2 / $10 per million tokens, so cost math is easy to check
+                "pricing": {"input_per_million": 2.0, "output_per_million": 10.0},
+            },
             # Lives on a second provider so tests can make one fail and not the other
             "primary": {"provider": "flaky", "model": "big-model", "fallbacks": ["smart"]},
             "claude": {

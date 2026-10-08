@@ -15,6 +15,12 @@ class ProviderConfig(BaseModel):
     timeout_seconds: float = 60.0
 
 
+class Pricing(BaseModel):
+    # US dollars per million tokens, from the provider's price list
+    input_per_million: float = 0.0
+    output_per_million: float = 0.0
+
+
 class ModelConfig(BaseModel):
     provider: str
     # The model name the provider expects, e.g. "llama3.2:1b"
@@ -23,6 +29,8 @@ class ModelConfig(BaseModel):
     drop_params: list[str] = []
     # Other model names to try, in order, if this one keeps failing
     fallbacks: list[str] = []
+    # Used for cost estimates; leave out for free/local models
+    pricing: Pricing | None = None
 
 
 class RetryConfig(BaseModel):

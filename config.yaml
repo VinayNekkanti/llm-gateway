@@ -38,10 +38,15 @@ models:
     model: llama3.2
     fallbacks: [fast]
 
+  # Local models are free, so they have no pricing. For paid models, add the price list
+  # (US dollars per million tokens) and GET /usage will estimate cost and cache savings.
   # claude:
   #   provider: anthropic
   #   model: claude-opus-5-5
   #   drop_params: [temperature, top_p] # this model rejects sampling parameters
+  #   pricing:
+  #     input_per_million: 4.00
+  #     output_per_million: 20.00
 
 # Redis holds the cache (REDIS_URL in the environment overrides this)
 redis:

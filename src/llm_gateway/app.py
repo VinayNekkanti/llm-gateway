@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
-from fastapi import Depends, FastAPI, Request, Response
+from fastapi import Depends, FastAPI, Query, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from llm_gateway.auth import load_api_keys, require_api_key
@@ -17,6 +17,7 @@ from llm_gateway.providers import ProviderError, build_providers
 from llm_gateway.ratelimit import RateLimiter, enforce_rate_limit
 from llm_gateway.redis_store import RedisStore
 from llm_gateway.router import Router
+from llm_gateway.usage import UsageTracker
 
 
 def create_app(
@@ -31,23 +32,28 @@ def create_app(
         # Runs once when the server starts
         app.state.config = config or load_config()
         app.state.api_keys = api_keys or load_api_keys()
-        # One shared HTTP client: reuses connections to the LLM instead of opening one per request
         cfg: Config = app.state.config
         store = RedisStore(cfg.redis.url, cfg.redis.timeout_seconds)
+        # One shared HTTP client: reuses connections to the LLM instead of opening one per request
         async with httpx.AsyncClient() as http:
             router = Router(cfg, build_providers(cfg, http))
             exact_cache = (
                 ExactCache(store, cfg.cache.exact.ttl_seconds) if cfg.cache.exact.enabled else None
             )
+            app.state.usage = UsageTracker(store)
             app.state.gateway = Gateway(
-                cfg, router, exact_cache, build_semantic_cache(cfg, store, embedder)
+                cfg,
+                router,
+                exact_cache,
+                build_semantic_cache(cfg, store, embedder),
+                app.state.usage,
             )
             app.state.rate_limiter = (
                 RateLimiter(store, cfg.rate_limit) if cfg.rate_limit.enabled else None
             )
             yield
+        # Server is stopping: the "async with" closed the HTTP client; now close Redis
         await store.close()
-        # Leaving the "async with" closes the client when the server stops
 
     app = FastAPI(title="LLM Gateway", lifespan=lifespan)
     app.add_exception_handler(GatewayError, gateway_error_handler)
@@ -65,6 +71,19 @@ def create_app(
             "object": "list",
             "data": [{"id": name, "object": "model", "owned_by": "llm-gateway"} for name in names],
         }
+
+    @app.get("/usage")
+    async def usage(
+        request: Request,
+        days: int = Query(30, ge=1, le=90),
+        key: str = Depends(require_api_key),
+    ) -> dict[str, Any]:
+        """Tokens, estimated cost and cache savings for the calling API key only."""
+        tracker: UsageTracker = request.app.state.usage
+        report = await tracker.report(key, days)
+        if report is None:
+            raise GatewayError(503, "Usage data is unavailable right now.", "api_error")
+        return report
 
     @app.post("/v1/chat/completions")
     async def chat_completions(
