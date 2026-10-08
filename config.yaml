@@ -14,6 +14,12 @@ providers:
   #   api_key_env: ANTHROPIC_API_KEY
   #   timeout_seconds: 120
 
+# Temporary failures (timeouts, 429, 5xx) are retried with exponential backoff
+retry:
+  max_attempts: 3
+  initial_backoff_seconds: 0.5
+  max_backoff_seconds: 4
+
 # Model names clients can ask for, and where each one goes
 models:
   "llama3.2:1b":
@@ -26,9 +32,11 @@ models:
   fast:
     provider: ollama
     model: llama3.2:1b
+    fallbacks: [smart] # if the small model keeps failing, use the bigger one
   smart:
     provider: ollama
     model: llama3.2
+    fallbacks: [fast]
 
   # claude:
   #   provider: anthropic

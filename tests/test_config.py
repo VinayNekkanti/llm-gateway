@@ -49,3 +49,9 @@ def test_repo_config_is_valid(monkeypatch: pytest.MonkeyPatch) -> None:
     # The config.yaml we ship must always load
     monkeypatch.delenv("GATEWAY_CONFIG", raising=False)
     assert load_config().models
+
+
+def test_unknown_fallback_fails_fast(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    write(tmp_path, monkeypatch, VALID + "    fallbacks: [missing]\n")
+    with pytest.raises(ValidationError, match="unknown fallback"):
+        load_config()

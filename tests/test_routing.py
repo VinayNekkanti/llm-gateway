@@ -99,7 +99,7 @@ def test_list_models(client: TestClient) -> None:
     response = client.get("/v1/models", headers=AUTH)
     assert response.status_code == 200
     ids = [m["id"] for m in response.json()["data"]]
-    assert ids == ["claude", "llama3.2:1b", "smart"]
+    assert ids == ["claude", "llama3.2:1b", "primary", "smart"]
 
 
 def test_list_models_needs_key(client: TestClient) -> None:

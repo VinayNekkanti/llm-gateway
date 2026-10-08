@@ -11,7 +11,7 @@ from llm_gateway.auth import load_api_keys, require_api_key
 from llm_gateway.config import Config, load_config
 from llm_gateway.errors import GatewayError, gateway_error_handler
 from llm_gateway.providers import ProviderError, build_providers
-from llm_gateway.router import Router
+from llm_gateway.router import Router, Target
 
 
 def create_app(config: Config | None = None, api_keys: list[str] | None = None) -> FastAPI:
@@ -51,18 +51,19 @@ def create_app(config: Config | None = None, api_keys: list[str] | None = None) 
         # 1. Read and check the request the app sent us
         body = await read_chat_request(request)
 
-        # 2. Pick where it goes based on the model name
+        # 2. Send it to the requested model, with retries and fallback models
         router: Router = request.app.state.router
-        target = router.resolve(body["model"])
-        upstream_body = target.prepare(body)
 
         # 3a. Streaming: send pieces back as they arrive
         if body.get("stream"):
-            chunks = await target.provider.open_stream(upstream_body)
-            return StreamingResponse(chunks, media_type="text/event-stream")
+            chunks, target = await router.open_stream(body)
+            return StreamingResponse(
+                chunks, media_type="text/event-stream", headers=served_by(target)
+            )
 
         # 3b. Not streaming: wait for the full answer, then send it back
-        return JSONResponse(await target.provider.chat(upstream_body))
+        result, target = await router.chat(body)
+        return JSONResponse(result, headers=served_by(target))
 
     return app
 
@@ -79,6 +80,11 @@ async def read_chat_request(request: Request) -> dict[str, Any]:
     if not isinstance(body.get("messages"), list) or not body["messages"]:
         raise GatewayError(400, "'messages' must be a non-empty list.", "invalid_request_error")
     return body
+
+
+def served_by(target: Target) -> dict[str, str]:
+    # Tells the client which model actually answered (differs from the request after a fallback)
+    return {"x-gateway-model": target.name}
 
 
 async def provider_error_handler(request: Request, exc: Exception) -> JSONResponse:

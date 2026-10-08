@@ -21,18 +21,32 @@ class ModelConfig(BaseModel):
     model: str
     # Request fields to remove before sending, for providers that reject them
     drop_params: list[str] = []
+    # Other model names to try, in order, if this one keeps failing
+    fallbacks: list[str] = []
+
+
+class RetryConfig(BaseModel):
+    # Total tries per model (1 = no retries)
+    max_attempts: int = 3
+    # Wait before the first retry; doubles each time (plus a little randomness), up to the max
+    initial_backoff_seconds: float = 0.5
+    max_backoff_seconds: float = 4.0
 
 
 class Config(BaseModel):
     providers: dict[str, ProviderConfig]
     # Model names clients can send -> where each one goes
     models: dict[str, ModelConfig]
+    retry: RetryConfig = RetryConfig()
 
     @model_validator(mode="after")
     def check_references(self) -> "Config":
         for name, model in self.models.items():
             if model.provider not in self.providers:
                 raise ValueError(f"Model '{name}' uses unknown provider '{model.provider}'")
+            for fallback in model.fallbacks:
+                if fallback not in self.models:
+                    raise ValueError(f"Model '{name}' has unknown fallback '{fallback}'")
         return self
 
 

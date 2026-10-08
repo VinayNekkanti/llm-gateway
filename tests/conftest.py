@@ -9,6 +9,7 @@ from llm_gateway.config import Config
 
 OLLAMA_URL = "http://ollama.test/v1/chat/completions"
 ANTHROPIC_URL = "http://anthropic.test/v1/messages"
+FLAKY_URL = "http://flaky.test/v1/chat/completions"
 API_KEY = "test-key"
 AUTH = {"Authorization": f"Bearer {API_KEY}"}
 
@@ -38,6 +39,7 @@ def make_config(**overrides: object) -> Config:
     data: dict = {
         "providers": {
             "ollama": {"type": "openai", "base_url": "http://ollama.test/v1", "timeout_seconds": 5},
+            "flaky": {"type": "openai", "base_url": "http://flaky.test/v1"},
             "anthropic": {
                 "type": "anthropic",
                 "base_url": "http://anthropic.test",
@@ -47,12 +49,16 @@ def make_config(**overrides: object) -> Config:
         "models": {
             "llama3.2:1b": {"provider": "ollama", "model": "llama3.2:1b"},
             "smart": {"provider": "ollama", "model": "llama3.2"},
+            # Lives on a second provider so tests can make one fail and not the other
+            "primary": {"provider": "flaky", "model": "big-model", "fallbacks": ["smart"]},
             "claude": {
                 "provider": "anthropic",
                 "model": "claude-opus-5-5",
                 "drop_params": ["temperature"],
             },
         },
+        # No waiting between retries, so tests run instantly
+        "retry": {"max_attempts": 3, "initial_backoff_seconds": 0, "max_backoff_seconds": 0},
     }
     data.update(overrides)
     return Config.model_validate(data)
