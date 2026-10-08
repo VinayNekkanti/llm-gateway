@@ -7,9 +7,13 @@ from fastapi.testclient import TestClient
 from llm_gateway.app import create_app
 from llm_gateway.config import Config
 
-UPSTREAM_URL = "http://upstream.test/v1/chat/completions"
+OLLAMA_URL = "http://ollama.test/v1/chat/completions"
+ANTHROPIC_URL = "http://anthropic.test/v1/messages"
 API_KEY = "test-key"
 AUTH = {"Authorization": f"Bearer {API_KEY}"}
+
+# Kept for older tests: the default upstream is the Ollama provider
+UPSTREAM_URL = OLLAMA_URL
 
 
 def chat_response(content: str = "Hello!") -> dict:
@@ -30,9 +34,38 @@ def chat_response(content: str = "Hello!") -> dict:
     }
 
 
+def make_config(**overrides: object) -> Config:
+    data: dict = {
+        "providers": {
+            "ollama": {"type": "openai", "base_url": "http://ollama.test/v1", "timeout_seconds": 5},
+            "anthropic": {
+                "type": "anthropic",
+                "base_url": "http://anthropic.test",
+                "api_key_env": "TEST_ANTHROPIC_KEY",
+            },
+        },
+        "models": {
+            "llama3.2:1b": {"provider": "ollama", "model": "llama3.2:1b"},
+            "smart": {"provider": "ollama", "model": "llama3.2"},
+            "claude": {
+                "provider": "anthropic",
+                "model": "claude-opus-5-5",
+                "drop_params": ["temperature"],
+            },
+        },
+    }
+    data.update(overrides)
+    return Config.model_validate(data)
+
+
+@pytest.fixture(autouse=True)
+def anthropic_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TEST_ANTHROPIC_KEY", "sk-test")
+
+
 @pytest.fixture
 def config() -> Config:
-    return Config.model_validate({"upstream": {"url": UPSTREAM_URL, "timeout_seconds": 5}})
+    return make_config()
 
 
 @pytest.fixture
