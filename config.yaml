@@ -54,3 +54,10 @@ cache:
     enabled: true
     ttl_seconds: 3600
     max_temperature: 0.3 # only cache low-randomness requests
+
+# Requests allowed per API key (sliding window); over the limit gets 429 + Retry-After
+rate_limit:
+  enabled: true
+  requests_per_minute: 60
+  window_seconds: 60
+  per_key: {} # e.g. key_1a2b3c4d5e6f: 600

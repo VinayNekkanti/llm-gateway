@@ -53,6 +53,14 @@ class CacheConfig(BaseModel):
     exact: ExactCacheConfig = ExactCacheConfig()
 
 
+class RateLimitConfig(BaseModel):
+    enabled: bool = True
+    requests_per_minute: int = 60
+    window_seconds: int = 60
+    # Different limits for specific keys, by key id (the "key_..." name shown in logs)
+    per_key: dict[str, int] = {}
+
+
 class Config(BaseModel):
     providers: dict[str, ProviderConfig]
     # Model names clients can send -> where each one goes
@@ -60,6 +68,7 @@ class Config(BaseModel):
     retry: RetryConfig = RetryConfig()
     redis: RedisConfig = RedisConfig()
     cache: CacheConfig = CacheConfig()
+    rate_limit: RateLimitConfig = RateLimitConfig()
 
     @model_validator(mode="after")
     def check_references(self) -> "Config":

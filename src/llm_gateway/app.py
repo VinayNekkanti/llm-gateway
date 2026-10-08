@@ -13,6 +13,7 @@ from llm_gateway.config import Config, load_config
 from llm_gateway.errors import GatewayError, gateway_error_handler
 from llm_gateway.gateway import Gateway
 from llm_gateway.providers import ProviderError, build_providers
+from llm_gateway.ratelimit import RateLimiter, enforce_rate_limit
 from llm_gateway.redis_store import RedisStore
 from llm_gateway.router import Router
 
@@ -34,6 +35,9 @@ def create_app(config: Config | None = None, api_keys: list[str] | None = None) 
                 ExactCache(store, cfg.cache.exact.ttl_seconds) if cfg.cache.exact.enabled else None
             )
             app.state.gateway = Gateway(cfg, router, exact_cache)
+            app.state.rate_limiter = (
+                RateLimiter(store, cfg.rate_limit) if cfg.rate_limit.enabled else None
+            )
             yield
         await store.close()
         # Leaving the "async with" closes the client when the server stops
@@ -56,7 +60,9 @@ def create_app(config: Config | None = None, api_keys: list[str] | None = None) 
         }
 
     @app.post("/v1/chat/completions")
-    async def chat_completions(request: Request, key: str = Depends(require_api_key)) -> Response:
+    async def chat_completions(
+        request: Request, key: str = Depends(enforce_rate_limit)
+    ) -> Response:
         # 1. Read and check the request the app sent us
         body = await read_chat_request(request)
 
